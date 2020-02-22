@@ -127,7 +127,6 @@ class RPN(nn.Module):
             nn.ZeroPad2d(1),
             nn.Conv2d(inplanes, planes, 3, stride=stride, bias=False),
             build_norm_layer(self._norm_cfg, planes)[1],
-            # nn.BatchNorm2d(planes, eps=1e-3, momentum=0.01),
             nn.ReLU(),
         )
 
@@ -135,7 +134,6 @@ class RPN(nn.Module):
             block.add(nn.Conv2d(planes, planes, 3, padding=1, bias=False))
             block.add(
                 build_norm_layer(self._norm_cfg, planes)[1],
-                # nn.BatchNorm2d(planes, eps=1e-3, momentum=0.01)
             )
             block.add(nn.ReLU())
 

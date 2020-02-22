@@ -32,7 +32,7 @@ class NuScenesDataset(PointCloudDataset):
         self,
         info_path,
         root_path,
-        nsweeps=1,
+        n_sweeps=1,
         cfg=None,
         pipeline=None,
         class_names=None,
@@ -43,7 +43,7 @@ class NuScenesDataset(PointCloudDataset):
             root_path, info_path, pipeline, test_mode=test_mode, class_names=class_names
         )
 
-        self.nsweeps = nsweeps
+        self.nsweeps = n_sweeps
         assert self.nsweeps > 0, "At least input one sweep please!"
 
         self._info_path = info_path
@@ -106,6 +106,7 @@ class NuScenesDataset(PointCloudDataset):
                     self._nusc_infos.extend(v)
             else:
                 self._nusc_infos = _nusc_infos_all
+        # import ipdb; ipdb.set_trace()
 
     def __len__(self):
 
@@ -248,6 +249,7 @@ class NuScenesDataset(PointCloudDataset):
                     "size": box.wlh.tolist(),
                     "rotation": box.orientation.elements.tolist(),
                     "velocity": box.velocity[:2].tolist(),
+                    # "velocity": 0,
                     "detection_name": name,
                     "detection_score": box.score,
                     "attribute_name": attr

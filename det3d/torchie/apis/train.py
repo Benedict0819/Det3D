@@ -297,7 +297,7 @@ def train_detector(model, dataset, cfg, distributed=False, validate=False, logge
 
     # put model on gpus
     if distributed:
-        model = apex.parallel.convert_syncbn_model(model)
+        # model = apex.parallel.convert_syncbn_model(model)
         model = DistributedDataParallel(
             model.cuda(cfg.local_rank),
             device_ids=[cfg.local_rank],
@@ -338,6 +338,8 @@ def train_detector(model, dataset, cfg, distributed=False, validate=False, logge
     if cfg.resume_from:
         trainer.resume(cfg.resume_from)
     elif cfg.load_from:
-        trainer.load_checkpoint(cfg.load_from)
+        trainer.resume(cfg.load_from, load_only_weights=True)
+
+    # import ipdb; ipdb.set_trace()
 
     trainer.run(data_loaders, cfg.workflow, cfg.total_epochs, local_rank=cfg.local_rank)

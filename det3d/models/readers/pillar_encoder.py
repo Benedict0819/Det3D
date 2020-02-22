@@ -12,7 +12,7 @@ from torch.nn import functional as F
 from .. import builder
 from ..registry import BACKBONES, READERS
 from ..utils import build_norm_layer
-
+from ..necks import ResNet_Panoptic_FPN
 
 class PFNLayer(nn.Module):
     def __init__(self, in_channels, out_channels, norm_cfg=None, last_layer=False):
@@ -40,19 +40,19 @@ class PFNLayer(nn.Module):
         self.norm = build_norm_layer(self.norm_cfg, self.units)[1]
 
     def forward(self, inputs):
-
         x = self.linear(inputs)
-        torch.backends.cudnn.enabled = False
-        x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2, 1).contiguous()
-        torch.backends.cudnn.enabled = True
+        # torch.backends.cudnn.enabled = False
+        # x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2, 1).contiguous()
+        # torch.backends.cudnn.enabled = True
+        x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1)
         x = F.relu(x)
-
         x_max = torch.max(x, dim=1, keepdim=True)[0]
+        
 
         if self.last_vfe:
             return x_max
         else:
-            x_repeat = x_max.repeat(1, inputs.shape[1], 1)
+            x_repeat = x_max.repeat(1, x.shape[1], 1)
             x_concatenated = torch.cat([x, x_repeat], dim=2)
             return x_concatenated
 
@@ -64,9 +64,12 @@ class PillarFeatureNet(nn.Module):
         num_input_features=4,
         num_filters=(64,),
         with_distance=False,
+        with_elevation=False,
         voxel_size=(0.2, 0.2, 4),
         pc_range=(0, -40, -3, 70.4, 40, 1),
         norm_cfg=None,
+        normalize_center_features=False,
+        group_input_raw_feats=None,
     ):
         """
         Pillar Feature Net.
@@ -83,10 +86,30 @@ class PillarFeatureNet(nn.Module):
         self.name = "PillarFeatureNet"
         assert len(num_filters) > 0
 
-        num_input_features += 5
-        if with_distance:
-            num_input_features += 1
+
         self._with_distance = with_distance
+        self._with_elevation = with_elevation
+        self._group_input_raw_feats = group_input_raw_feats
+
+        if self._group_input_raw_feats is not None:
+            raw_feat_dim = self._group_input_raw_feats[0] + 5
+            if with_distance:
+                raw_feat_dim += 1
+            if with_elevation:
+                raw_feat_dim += 1
+            self._group_input_pfn_layers = nn.ModuleDict()
+            self._group_input_pfn_layers['raw'] = PFNLayer(
+                    raw_feat_dim, num_input_features, norm_cfg=norm_cfg, last_layer=False
+                )
+            self._group_input_pfn_layers['deep'] = PFNLayer(
+                    self._group_input_raw_feats[1], num_input_features, norm_cfg=norm_cfg, last_layer=False
+                )
+        else:
+            num_input_features += 5
+            if with_distance:
+                num_input_features += 1
+            if with_elevation:
+                num_input_features += 1
 
         # Create PillarFeatureNet layers
         num_filters = [num_input_features] + list(num_filters)
@@ -111,34 +134,53 @@ class PillarFeatureNet(nn.Module):
         self.x_offset = self.vx / 2 + pc_range[0]
         self.y_offset = self.vy / 2 + pc_range[1]
 
-    def forward(self, features, num_voxels, coors):
+        self.normalize_center_features = normalize_center_features
+
+    def get_pillar_feat(self, features, num_voxels, coors, normalized_feat=False):
         device = features.device
 
         dtype = features.dtype
 
         # Find distance of x, y, and z from cluster center
-        features = features[:, :, :4]
         points_mean = features[:, :, :3].sum(dim=1, keepdim=True) / num_voxels.type_as(
             features
         ).view(-1, 1, 1)
         f_cluster = features[:, :, :3] - points_mean
 
+        if self.normalize_center_features:
+            f_cluster[:, :, 0] = 2 * f_cluster[:, :, 0] / self.vx
+            f_cluster[:, :, 1] = 2 * f_cluster[:, :, 1] / self.vy
         # Find distance of x, y, and z from pillar center
         # f_center = features[:, :, :2]
         f_center = torch.zeros_like(features[:, :, :2])
-        f_center[:, :, 0] = f_center[:, :, 0] - (
+        f_center[:, :, 0] = features[:, :, 0] - (
             coors[:, 3].to(dtype).unsqueeze(1) * self.vx + self.x_offset
         )
-        f_center[:, :, 1] = f_center[:, :, 1] - (
+        f_center[:, :, 1] = features[:, :, 1] - (
             coors[:, 2].to(dtype).unsqueeze(1) * self.vy + self.y_offset
         )
 
+        if self.normalize_center_features:
+            f_center[:, :, 0] = 2 * f_center[:, :, 0] / self.vx
+            f_center[:, :, 1] = 2 * f_center[:, :, 1] / self.vy
+
+        # remove unnormalized dimensions
+
+        features_additional = []
+        if self._with_elevation:
+            r = torch.norm(features[:, :, :2], 2, 2, keepdim=True)
+            phi = torch.atan2(r, features[:, :, 2].view_as(r))
+            features_additional.append(phi)
+
+        if normalized_feat:
+            features = features[:, :, 3:]
         # Combine together feature decorations
         features_ls = [features, f_cluster, f_center]
+
         if self._with_distance:
             points_dist = torch.norm(features[:, :, :3], 2, 2, keepdim=True)
-            features_ls.append(points_dist)
-        features = torch.cat(features_ls, dim=-1)
+            features_additional.append(points_dist)
+        features = torch.cat(features_ls + features_additional, dim=-1)
 
         # The feature decorations were calculated without regard to whether pillar was empty. Need to ensure that
         # empty pillars remain set to zeros.
@@ -146,6 +188,23 @@ class PillarFeatureNet(nn.Module):
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)
         features *= mask
+
+        return features
+
+    def forward(self, features, num_voxels, coors, normalized_feat=False):
+
+        if self._group_input_raw_feats is not None:
+            splitter = self._group_input_raw_feats[0]
+            if normalized_feat:
+                splitter += 3
+            features_raw = self.get_pillar_feat(features[:, :, :splitter], num_voxels, coors, normalized_feat)
+            features_raw = self._group_input_pfn_layers['raw'](features_raw)
+            features_deep = features[:, :, splitter:]
+            features_deep = self._group_input_pfn_layers['deep'](features_deep)
+            features = features_raw + features_deep
+
+        else:
+            features = self.get_pillar_feat(features, num_voxels, coors, normalized_feat)
 
         # Forward pass through PFNLayers
         for pfn in self.pfn_layers:
@@ -190,7 +249,7 @@ class PointPillarsScatter(nn.Module):
             # Only include non-empty pillars
             batch_mask = coords[:, 0] == batch_itt
             this_coords = coords[batch_mask, :]
-            indices = this_coords[:, 2] * self.nx + this_coords[:, 3]
+            indices = this_coords[:, 2] * int(self.nx) + this_coords[:, 3]
             indices = indices.type(torch.long)
             voxels = voxel_features[batch_mask, :]
             voxels = voxels.t()

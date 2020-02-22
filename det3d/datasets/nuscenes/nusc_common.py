@@ -513,7 +513,12 @@ def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False, nsweeps=10)
             locs = np.array([b.center for b in ref_boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in ref_boxes]).reshape(-1, 3)
             # rots = np.array([b.orientation.yaw_pitch_roll[0] for b in ref_boxes]).reshape(-1, 1)
-            velocity = np.array([b.velocity for b in ref_boxes]).reshape(-1, 3)
+            if nsweeps > 1:
+                velocity = np.array([b.velocity for b in ref_boxes]).reshape(-1, 3)
+                assert not np.isnan(np.sum(velocity))
+            else:
+                velocity = np.zeros((len(ref_boxes), 3))
+            
             rots = np.array([quaternion_yaw(b.orientation) for b in ref_boxes]).reshape(
                 -1, 1
             )

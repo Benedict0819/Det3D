@@ -12,6 +12,7 @@ from det3d.builder import (
     build_box_coder,
 )
 from det3d.core.input.voxel_generator import VoxelGenerator
+from det3d.core.input.panoview_projector import PanoviewProjector
 from det3d.core.anchor.target_assigner import TargetAssigner
 
 from ..registry import PIPELINES
@@ -36,7 +37,9 @@ class Preprocess(object):
         self.reference_detections = cfg.get("reference_detections", None)
         self.remove_outside_points = cfg.get("remove_outside_points", False)
         self.random_crop = cfg.get("random_crop", False)
-
+        self.time_stamp_as_last_feature = cfg.get("time_stamp_as_last_feature", True)
+        self.num_point_features_sampler = cfg.get("num_point_features_sampler", 5)
+        self.num_point_features = cfg.get("num_point_features", 5)
         self.mode = cfg.mode
         if self.mode == "train":
             self.gt_rotation_noise = cfg.gt_rot_noise
@@ -61,7 +64,10 @@ class Preprocess(object):
         if res["type"] in ["KittiDataset", "LyftDataset"]:
             points = res["lidar"]["points"]
         elif res["type"] == "NuScenesDataset":
-            points = res["lidar"]["combined"]
+            if self.time_stamp_as_last_feature:
+                points = res["lidar"]["combined"]
+            else:
+                points = res["lidar"]["points"]
 
         if self.mode == "train":
             anno_dict = res["lidar"]["annotations"]
@@ -154,7 +160,8 @@ class Preprocess(object):
                     res["metadata"]["image_prefix"],
                     gt_dict["gt_boxes"],
                     gt_dict["gt_names"],
-                    res["metadata"]["num_point_features"],
+                    self.num_point_features_sampler,
+                    self.num_point_features,
                     self.random_crop,
                     gt_group_ids=None,
                     calib=calib,
@@ -248,8 +255,58 @@ class Preprocess(object):
 
             res["lidar"]["annotations"] = gt_dict
 
+        # import ipdb; ipdb.set_trace()
         return res, info
 
+@PIPELINES.register_module
+class PanoviewProjection(object):
+    def __init__(self, **kwargs):
+        cfg = kwargs.get("cfg", None)
+        self.lidar_xyz = cfg.lidar_xyz
+        self.h_steps = cfg.h_steps
+        self.v_steps = cfg.v_steps
+        self.project_gt_boxes = cfg.get("project_gt_boxes", False)
+        self.sort_points_by_range = cfg.get("sort_points_by_range", False)
+        self.prioritize_key_frame = cfg.get("prioritize_key_frame", False)
+        self.min_points_in_bbox = cfg.get("min_points_in_bbox", -1)
+        self.shuffle_points = cfg.get("shuffle_points", False)
+        self.mode = cfg.get("mode", "train")
+        self.panoview_projector = PanoviewProjector(
+            lidar_xyz=[0, 0, 0], 
+            h_steps=self.h_steps, 
+            v_steps=self.v_steps,
+            sort_points_by_range=self.sort_points_by_range,
+            prioritize_key_frame=self.prioritize_key_frame,
+        )
+
+    
+    def __call__(self, res, info):
+        res["lidar"]["points"], feat, valid_idx, ix, iy = self.panoview_projector.project(
+            res["lidar"]["points"]
+        )
+        res["lidar"]["points"] = res["lidar"]["points"][valid_idx]
+        if self.mode == "train":
+            if self.min_points_in_bbox > 0:
+                gt_dict = res["lidar"]["annotations"]
+                # points_count_rbbox takes 10ms with 10 sweeps nuscenes data
+                point_counts = box_np_ops.points_count_rbbox(
+                    res["lidar"]["points"], gt_dict["gt_boxes"]
+                )
+                mask = point_counts >= self.min_points_in_bbox
+                _dict_select(gt_dict, mask)
+                res["lidar"]["annotations"] = gt_dict
+
+        if self.shuffle_points:
+            # shuffle is a little slow.
+            shuffled_idx = np.arange(res["lidar"]["points"].shape[0])
+            np.random.shuffle(shuffled_idx)
+            res["lidar"]["points"] = res["lidar"]["points"][shuffled_idx]
+            ix = ix[shuffled_idx]
+            iy = iy[shuffled_idx]
+
+        res["lidar"]["panoview"] = dict(feat=feat, ix=ix, iy=iy)
+        # import ipdb; ipdb.set_trace()
+        return res, info
 
 @PIPELINES.register_module
 class Voxelization(object):
@@ -259,12 +316,14 @@ class Voxelization(object):
         self.voxel_size = cfg.voxel_size
         self.max_points_in_voxel = cfg.max_points_in_voxel
         self.max_voxel_num = cfg.max_voxel_num
+        self.include_pt_to_voxel = cfg.get("include_pt_to_voxel", False)
 
         self.voxel_generator = VoxelGenerator(
             voxel_size=self.voxel_size,
             point_cloud_range=self.range,
             max_num_points=self.max_points_in_voxel,
             max_voxels=self.max_voxel_num,
+            return_pt_to_voxel=self.include_pt_to_voxel,
         )
 
     def __call__(self, res, info):
@@ -283,9 +342,13 @@ class Voxelization(object):
             res["lidar"]["annotations"] = gt_dict
 
         # points = points[:int(points.shape[0] * 0.1), :]
-        voxels, coordinates, num_points = self.voxel_generator.generate(
-            res["lidar"]["points"]
-        )
+        points = res["lidar"]["points"]
+        
+        if self.include_pt_to_voxel:
+            voxels, coordinates, num_points, pt_to_voxel = self.voxel_generator.generate(points)
+        else:
+            voxels, coordinates, num_points = self.voxel_generator.generate(points)
+
         num_voxels = np.array([voxels.shape[0]], dtype=np.int64)
 
         res["lidar"]["voxels"] = dict(
@@ -295,6 +358,9 @@ class Voxelization(object):
             num_voxels=num_voxels,
             shape=grid_size,
         )
+
+        if self.include_pt_to_voxel:
+            res["lidar"]["voxels"]["pt_to_voxel"] = pt_to_voxel
 
         return res, info
 

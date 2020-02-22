@@ -3,7 +3,7 @@ from det3d.ops.point_cloud.point_cloud_ops import points_to_voxel
 
 
 class VoxelGenerator:
-    def __init__(self, voxel_size, point_cloud_range, max_num_points, max_voxels=20000):
+    def __init__(self, voxel_size, point_cloud_range, max_num_points, max_voxels=20000, return_pt_to_voxel=False):
         point_cloud_range = np.array(point_cloud_range, dtype=np.float32)
         # [0, -40, -3, 70.4, 40, 1]
         voxel_size = np.array(voxel_size, dtype=np.float32)
@@ -15,6 +15,7 @@ class VoxelGenerator:
         self._max_num_points = max_num_points
         self._max_voxels = max_voxels
         self._grid_size = grid_size
+        self._return_pt_to_voxel = return_pt_to_voxel
 
     def generate(self, points, max_voxels=20000):
         return points_to_voxel(
@@ -24,6 +25,7 @@ class VoxelGenerator:
             self._max_num_points,
             True,
             self._max_voxels,
+            return_pt_to_voxel = self._return_pt_to_voxel
         )
 
     @property

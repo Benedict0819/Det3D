@@ -29,12 +29,14 @@ def create_groundtruth_database(
     lidar_only=False,
     bev_only=False,
     coors_range=None,
+    num_point_feature=4, #5 to include ring
     **kwargs,
 ):
     pipeline = [
         {
             "type": "LoadPointCloudFromFile",
             "dataset": dataset_name_map[dataset_class_name],
+            "num_point_feature": num_point_feature,
         },
         {"type": "LoadPointCloudAnnotations", "with_bbox": True},
     ]
@@ -45,7 +47,7 @@ def create_groundtruth_database(
             root_path=data_path,
             pipeline=pipeline,
             test_mode=True,
-            nsweeps=kwargs["nsweeps"],
+            n_sweeps=kwargs["nsweeps"],
         )
         nsweeps = dataset.nsweeps
     else:
@@ -67,7 +69,9 @@ def create_groundtruth_database(
         if dbinfo_path is None:
             dbinfo_path = root_path / "dbinfos_train.pkl"
     if dataset_class_name == "NUSC" or dataset_class_name == "LYFT":
-        point_features = 5
+        point_features = num_point_feature
+        if nsweeps > 1:
+            point_features += 1
     elif dataset_class_name == "KITTI":
         point_features = 4
 
@@ -86,7 +90,11 @@ def create_groundtruth_database(
             image_idx = sensor_data["metadata"]["image_idx"]
 
         if dataset_class_name == "NUSC":
-            points = sensor_data["lidar"]["combined"]
+            if nsweeps > 1:
+                points = sensor_data["lidar"]["combined"]
+            else:
+                points = sensor_data["lidar"]["points"]
+
         elif dataset_class_name == "KITTI":
             points = sensor_data["lidar"]["points"]
         elif dataset_class_name == "LYFT":
@@ -106,6 +114,7 @@ def create_groundtruth_database(
         if "difficulty" in annos:
             difficulty = annos["difficulty"]
 
+        import ipdb; ipdb.set_trace()
         num_obj = gt_boxes.shape[0]
         point_indices = box_np_ops.points_in_rbbox(points, gt_boxes)
         for i in range(num_obj):
@@ -151,5 +160,8 @@ def create_groundtruth_database(
     for k, v in all_db_infos.items():
         print(f"load {len(v)} {k} database infos")
 
+    # import ipdb; ipdb.set_trace()
+
     with open(dbinfo_path, "wb") as f:
-        pickle.dump(all_db_infos, f)
+        pickle.dump(all_db_infos, f, protocol=pickle.HIGHEST_PROTOCOL)
+        # pickle.dump(all_db_infos, f)

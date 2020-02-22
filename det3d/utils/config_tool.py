@@ -4,8 +4,6 @@
 from pathlib import Path
 
 import numpy as np
-from google.protobuf import text_format
-
 
 def change_detection_range(model_config, new_range):
     assert len(new_range) == 4, "you must provide a list such as [-50, -50, 50, 50]"

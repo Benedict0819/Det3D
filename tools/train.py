@@ -1,3 +1,4 @@
+
 import argparse
 import json
 import os
@@ -6,10 +7,25 @@ import sys
 import numpy as np
 import torch
 import yaml
+import torch
+
 from det3d import __version__
+
+# solving the LD_PREBUILD protobuf problem:
+from torch.utils.tensorboard import SummaryWriter
+dummy_writer = SummaryWriter('/home/xiac/tmp/')
+del dummy_writer
+
 from det3d.datasets import build_dataset
+
+# from google.protobuf.pyext import _message
+
+# importlib.reload(SummaryWriter)
+# import ipdb; ipdb.set_trace()
+
 from det3d.models import build_detector
 from det3d.torchie import Config
+
 from det3d.torchie.apis import (
     build_optimizer,
     get_root_logger,
@@ -24,6 +40,7 @@ def parse_args():
     parser.add_argument("config", help="train config file path")
     parser.add_argument("--work_dir", help="the dir to save logs and models")
     parser.add_argument("--resume_from", help="the checkpoint file to resume from")
+    parser.add_argument("--load_from", help="the checkpoint file to load from, only weights")
     parser.add_argument(
         "--validate",
         action="store_true",
@@ -56,10 +73,9 @@ def parse_args():
 
 
 def main():
-
     # torch.manual_seed(0)
     # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
     # np.random.seed(0)
 
     args = parse_args()
@@ -72,7 +88,9 @@ def main():
         cfg.work_dir = args.work_dir
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
-
+    if args.load_from is not None:
+        cfg.load_from = args.load_from
+        
     distributed = False
     if "WORLD_SIZE" in os.environ:
         distributed = int(os.environ["WORLD_SIZE"]) > 1
@@ -104,7 +122,6 @@ def main():
         set_random_seed(args.seed)
 
     model = build_detector(cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
-
     datasets = [build_dataset(cfg.data.train)]
 
     if len(cfg.workflow) == 2:

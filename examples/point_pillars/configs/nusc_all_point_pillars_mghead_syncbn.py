@@ -5,7 +5,8 @@ from det3d.builder import build_box_coder
 from det3d.utils.config_tool import get_downsample_factor
 
 # norm_cfg = dict(type='SyncBN', eps=1e-3, momentum=0.01)
-norm_cfg = None
+norm_cfg = dict(type='PyTorchSyncBN', eps=1e-5, momentum=0.1)
+# norm_cfg = None
 
 tasks = [
     dict(num_class=1, class_names=["car"]),
@@ -139,6 +140,7 @@ model = dict(
     pretrained=None,
     reader=dict(
         type="PillarFeatureNet",
+        num_input_features=5,
         num_filters=[64],
         with_distance=False,
         norm_cfg=norm_cfg,
@@ -212,12 +214,12 @@ test_cfg = dict(
 # dataset settings
 dataset_type = "NuScenesDataset"
 n_sweeps = 10
-data_root = "/data/Datasets/nuScenes"
+data_root = "/datasets/nuscenes/"
 
 db_sampler = dict(
     type="GT-AUG",
     enable=False,
-    db_info_path="/data/Datasets/nuScenes/dbinfos_train_10sweeps_withvelo.pkl",
+    db_info_path=data_root + "dbinfos_train_10sweeps_withvelo.pkl",
     sample_groups=[
         dict(car=2),
         dict(truck=3),
@@ -278,7 +280,7 @@ val_preprocessor = dict(
 voxel_generator = dict(
     range=[-50, -50, -4.0, 50, 50, 2.0],
     voxel_size=[0.25, 0.25, 6],
-    max_points_in_voxel=50,
+    max_points_in_voxel=100,
     max_voxel_num=60000,
 )
 
@@ -300,13 +302,13 @@ test_pipeline = [
     dict(type="Reformat"),
 ]
 
-train_anno = "/data/Datasets/nuScenes/infos_train_10sweeps_withvelo.pkl"
-val_anno = "/data/Datasets/nuScenes/infos_val_10sweeps_withvelo.pkl"
+train_anno = data_root + "infos_train_10sweeps_withvelo.pkl"
+val_anno = data_root + "infos_val_10sweeps_withvelo.pkl"
 test_anno = None
 
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=3,
+    samples_per_gpu=3,
+    workers_per_gpu=8,
     train=dict(
         type=dataset_type,
         root_path=data_root,
@@ -339,7 +341,7 @@ data = dict(
 
 # optimizer
 optimizer = dict(
-    type="adam", amsgrad=0.0, wd=0.01, fixed_wd=True, moving_average=False,
+    type="adam", amsgrad=0.0, wd=0.0001, fixed_wd=True, moving_average=False,
 )
 
 """training hooks """
@@ -355,7 +357,7 @@ log_config = dict(
     interval=5,
     hooks=[
         dict(type="TextLoggerHook"),
-        # dict(type='TensorboardLoggerHook')
+        dict(type='TensorboardLoggerHook')
     ],
 )
 # yapf:enable

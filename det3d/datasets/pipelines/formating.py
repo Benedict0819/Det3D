@@ -5,15 +5,15 @@ import torch
 from ..registry import PIPELINES
 
 
-class DataBundle(object):
-    def __init__(self, data):
-        self.data = data
+# class DataBundle(object):
+#     def __init__(self, data):
+#         self.data = data
 
 
 @PIPELINES.register_module
 class Reformat(object):
     def __init__(self, **kwargs):
-        pass
+        self.pack_imageview_info = kwargs.get('pack_imageview_info', False)
 
     def __call__(self, res, info):
         meta = res["metadata"]
@@ -31,6 +31,17 @@ class Reformat(object):
             coordinates=voxels["coordinates"],
             anchors=anchors,
         )
+
+        if self.pack_imageview_info:
+            pt_to_voxel = voxels["pt_to_voxel"]
+            valid_idx = pt_to_voxel[:, 0] != -1
+            data_bundle.update(dict(
+                panoview_feat=res["lidar"]["panoview"]["feat"],
+                panoview_ix=res["lidar"]["panoview"]["ix"][valid_idx],
+                panoview_iy=res["lidar"]["panoview"]["iy"][valid_idx],
+                panoview_ib=np.zeros((valid_idx.sum(), ), dtype=np.int),
+                pt_to_voxel=pt_to_voxel[valid_idx],
+                ))
 
         if res["mode"] == "val":
             data_bundle.update(dict(metadata=meta,))
@@ -55,7 +66,6 @@ class Reformat(object):
             data_bundle.update(
                 dict(labels=labels, reg_targets=reg_targets, reg_weights=reg_weights,)
             )
-
         return data_bundle, info
 
 

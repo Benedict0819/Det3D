@@ -94,10 +94,18 @@ def collate_kitti(batch_list, samples_per_gpu=1):
             example_merged[k].append(v)
     batch_size = len(batch_list)
     ret = {}
+    ret["batch_size"] = batch_size
     # voxel_nums_list = example_merged["num_voxels"]
     # example_merged.pop("num_voxels")
+    if "num_voxels" in example_merged:
+        prev_sum = np.zeros(len(example_merged["num_voxels"]), dtype=np.int)
+        acc = 0
+        for i, num in enumerate(example_merged["num_voxels"]):
+            prev_sum[i] = acc
+            acc += num.sum()
+
     for key, elems in example_merged.items():
-        if key in ["voxels", "num_points", "num_gt", "voxel_labels", "num_voxels"]:
+        if key in ["voxels", "num_points", "num_gt", "voxel_labels", "num_voxels", "panoview_ix", "panoview_iy"]:
             ret[key] = torch.tensor(np.concatenate(elems, axis=0))
         elif key in [
             "gt_boxes",
@@ -144,6 +152,17 @@ def collate_kitti(batch_list, samples_per_gpu=1):
             for kk, vv in ret[key].items():
                 res.append(torch.stack(vv))
             ret[key] = res
+        elif key in ["pt_to_voxel"]:
+            prev = 0
+            for i in range(1, len(elems)):
+                elems[i][:, 0] += prev_sum[i]
+            ret[key] = torch.tensor(np.concatenate(elems, axis=0))
+        elif key in ["panoview_ib"]:
+            for i in range(1, len(elems)):
+                elems[i] += i
+            ret[key] = torch.tensor(np.concatenate(elems, axis=0))
+        elif isinstance(elems[0], np.ndarray):
+            ret[key] = torch.tensor(np.stack(elems, axis=0))
         else:
             ret[key] = np.stack(elems, axis=0)
 

@@ -31,7 +31,7 @@ from .utils import (
 )
 
 
-def example_to_device(example, device, non_blocking=False) -> dict:
+def example_to_device(example, device, non_blocking=False, return_stats=False) -> dict:
     example_torch = {}
     float_names = ["voxels", "bev_map"]
     for k, v in example.items():
@@ -44,6 +44,11 @@ def example_to_device(example, device, non_blocking=False) -> dict:
             "num_points",
             "points",
             "num_voxels",
+            "panoview_feat",
+            "panoview_ib",
+            "panoview_ix",
+            "panoview_iy",
+            "pt_to_voxel",
         ]:
             example_torch[k] = v.to(device, non_blocking=non_blocking)
         elif k == "calib":
@@ -53,8 +58,14 @@ def example_to_device(example, device, non_blocking=False) -> dict:
             example_torch[k] = calib
         else:
             example_torch[k] = v
+    if not return_stats:
+        return example_torch
+    else:
+        stats={}
+        if "num_points" in example:
+            stats["total_num_points"] = example["num_points"].sum().item() / example["batch_size"]
+        return example_torch, stats
 
-    return example_torch
 
 
 def parse_second_losses(losses):
@@ -181,6 +192,7 @@ class Trainer(object):
         self._inner_iter = 0
         self._max_epochs = 0
         self._max_iters = 0
+        self._example_stats = None
 
     @property
     def model_name(self):
@@ -286,6 +298,12 @@ class Trainer(object):
             raise RuntimeError("lr is not applicable because optimizer does not exist.")
         return [group["lr"] for group in self.optimizer.param_groups]
 
+    def get_example_stats(self):
+        if self._example_stats is None:
+            return dict(total_num_points=-1)
+        else:
+            return self._example_stats
+
     def register_hook(self, hook, priority="NORMAL"):
         """Register a hook into the hook list.
 
@@ -352,8 +370,8 @@ class Trainer(object):
             device = None
 
         # data = example_convert_to_torch(data, device=device)
-        example = example_to_device(
-            data, torch.cuda.current_device(), non_blocking=False
+        example, self._example_stats = example_to_device(
+            data, torch.cuda.current_device(), non_blocking=False, return_stats=True
         )
 
         self.call_hook("after_data_to_device")
@@ -472,20 +490,21 @@ class Trainer(object):
 
         self.call_hook("after_val_epoch")
 
-    def resume(self, checkpoint, resume_optimizer=True, map_location="default"):
+    def resume(self, checkpoint, resume_optimizer=True, map_location="default", load_only_weights=False):
         if map_location == "default":
             checkpoint = self.load_checkpoint(
-                checkpoint, map_location=torch.cuda.current_device()
+                checkpoint, map_location=f"cuda:{torch.cuda.current_device()}"
             )
         else:
             checkpoint = self.load_checkpoint(checkpoint, map_location=map_location)
+        
+        if not load_only_weights:
+            self._epoch = checkpoint["meta"]["epoch"]
+            self._iter = checkpoint["meta"]["iter"]
+            if "optimizer" in checkpoint and resume_optimizer:
+                self.optimizer.load_state_dict(checkpoint["optimizer"])
 
-        self._epoch = checkpoint["meta"]["epoch"]
-        self._iter = checkpoint["meta"]["iter"]
-        if "optimizer" in checkpoint and resume_optimizer:
-            self.optimizer.load_state_dict(checkpoint["optimizer"])
-
-        self.logger.info("resumed epoch %d, iter %d", self.epoch, self.iter)
+            self.logger.info("resumed epoch %d, iter %d", self.epoch, self.iter)
 
     def run(self, data_loaders, workflow, max_epochs, **kwargs):
         """ Start running.

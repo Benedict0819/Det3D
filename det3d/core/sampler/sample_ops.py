@@ -99,6 +99,7 @@ class DataBaseSamplerV2:
         root_path,
         gt_boxes,
         gt_names,
+        num_point_features_sampler,
         num_point_features,
         random_crop=False,
         gt_group_ids=None,
@@ -178,7 +179,7 @@ class DataBaseSamplerV2:
                     # TODO fix point read error
                     s_points = np.fromfile(
                         str(pathlib.Path(root_path) / info["path"]), dtype=np.float32
-                    ).reshape(-1, num_point_features)
+                    ).reshape(-1, num_point_features_sampler)
                     # if not add_rgb_to_points:
                     #     s_points = s_points[:, :4]
                     if "rot_transform" in info:
@@ -213,6 +214,7 @@ class DataBaseSamplerV2:
                         s_points = s_points[np.logical_not(mask)]
                     s_points_list_new.append(s_points)
                 s_points_list = s_points_list_new
+
             ret = {
                 "gt_names": np.array([s["name"] for s in sampled]),
                 "difficulty": np.array([s["difficulty"] for s in sampled]),
@@ -226,6 +228,15 @@ class DataBaseSamplerV2:
                 ret["group_ids"] = np.arange(
                     gt_boxes.shape[0], gt_boxes.shape[0] + len(sampled)
                 )
+
+            if num_point_features < num_point_features_sampler:
+                if num_point_features_sampler > 5:
+                    ret["points"] = np.concatenate((ret["points"][:, :num_point_features-1],  ret["points"][:, -1:]), axis=-1)
+                else:
+                    ret["points"] = ret["points"][:, :num_point_features] 
+            # ret["points"][:, -1] = -1
+            # ret["points"] = np.concatenate([ret["points"], np.zeros((ret["points"].shape[0], 1), dtype=ret["points"].dtype)], axis=1)
+
         else:
             ret = None
         return ret

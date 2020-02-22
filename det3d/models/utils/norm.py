@@ -64,6 +64,7 @@ norm_cfg = {
     "GN": ("gn", nn.GroupNorm),
     "SyncBN": ("bn", DistributedSyncBN),
     "NaiveSyncBN": ("bn", NaiveSyncBatchNorm),
+    "PyTorchSyncBN": ("bn", nn.SyncBatchNorm),
     # and potentially 'SN'
 }
 

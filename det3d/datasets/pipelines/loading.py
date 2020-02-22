@@ -16,6 +16,7 @@ from ..registry import PIPELINES
 
 def read_file(path, tries=2, num_point_feature=4):
     points = None
+    min_distance = 1.0
     try_cnt = 0
     while points is None and try_cnt < tries:
         try_cnt += 1
@@ -24,10 +25,15 @@ def read_file(path, tries=2, num_point_feature=4):
             s = points.shape[0]
             if s % 5 != 0:
                 points = points[: s - (s % 5)]
-            points = points.reshape(-1, 5)[:, :num_point_feature]
+            points = points.reshape(-1, 5)
+            if num_point_feature < 5:
+                points = points[:, :num_point_feature]
+            elif num_point_feature > 5:
+                points = np.concatenate((points, np.ones((points.shape[0], num_point_feature-5), dtype=points.dtype)), axis=-1)
+            points = remove_close(points.T, min_distance).T
         except Exception:
             points = None
-
+    # points[:, -1] = 0.0
     return points
 
 
@@ -43,12 +49,11 @@ def remove_close(points, radius: float) -> None:
     return points
 
 
-def read_sweep(sweep):
-    min_distance = 1.0
+def read_sweep(sweep, num_point_feature=4):
     # points_sweep = np.fromfile(str(sweep["lidar_path"]),
     #                            dtype=np.float32).reshape([-1,
     #                                                       5])[:, :4].T
-    points_sweep = read_file(str(sweep["lidar_path"])).T
+    points_sweep = read_file(str(sweep["lidar_path"]), num_point_feature=num_point_feature).T
 
     nbr_points = points_sweep.shape[1]
     if sweep["transform_matrix"] is not None:
@@ -56,7 +61,6 @@ def read_sweep(sweep):
             np.vstack((points_sweep[:3, :], np.ones(nbr_points)))
         )[:3, :]
     # points_sweep[3, :] /= 255
-    points_sweep = remove_close(points_sweep, min_distance)
     curr_times = sweep["time_lag"] * np.ones((1, points_sweep.shape[1]))
 
     return points_sweep.T, curr_times.T
@@ -68,6 +72,7 @@ class LoadPointCloudFromFile(object):
         self.type = dataset
         self.random_select = kwargs.get("random_select", False)
         self.npoints = kwargs.get("npoints", 16834)
+        self.num_point_feature = kwargs.get("num_point_feature", 4)
 
     def __call__(self, res, info):
 
@@ -99,7 +104,7 @@ class LoadPointCloudFromFile(object):
             nsweeps = res["lidar"]["nsweeps"]
 
             lidar_path = Path(info["lidar_path"])
-            points = read_file(str(lidar_path))
+            points = read_file(str(lidar_path), num_point_feature=self.num_point_feature)
 
             # points[:, 3] /= 255
             sweep_points_list = [points]
@@ -113,7 +118,7 @@ class LoadPointCloudFromFile(object):
 
             for i in np.random.choice(len(info["sweeps"]), nsweeps - 1, replace=False):
                 sweep = info["sweeps"][i]
-                points_sweep, times_sweep = read_sweep(sweep)
+                points_sweep, times_sweep = read_sweep(sweep, num_point_feature=self.num_point_feature)
                 sweep_points_list.append(points_sweep)
                 sweep_times_list.append(times_sweep)
 
@@ -127,7 +132,7 @@ class LoadPointCloudFromFile(object):
         elif self.type == "LyftDataset":
 
             top_info = info["ref_info"]["LIDAR_TOP"]
-            points = read_file(top_info["lidar_path"])
+            points = read_file(top_info["lidar_path"], num_point_feature=self.num_point_feature)
 
             # if "LIDAR_FRONT_LEFT" in info["ref_info"] and \
             #         "LIDAR_FRONT_RIGHT" in info["ref_info"]:
@@ -155,7 +160,6 @@ class LoadPointCloudFromFile(object):
             #                             axis=0).astype(np.float32)
 
             res["lidar"]["points"] = points
-
         else:
             raise NotImplementedError
 

@@ -178,7 +178,7 @@ def register_hook(tensor, msg):
 
 
 def get_paddings_indicator(actual_num, max_num, axis=0):
-    """Create boolean mask by actually number of a padded tensor.
+    """Create boolean mask by actual number of a padded tensor.
 
     Args:
         actual_num ([type]): [description]

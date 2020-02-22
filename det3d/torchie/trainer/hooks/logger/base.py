@@ -18,6 +18,7 @@ class LoggerHook(Hook):
         self.interval = interval
         self.ignore_last = ignore_last
         self.reset_flag = reset_flag
+        self.time_sec_tot = 0
 
     @abstractmethod
     def log(self, trainer):

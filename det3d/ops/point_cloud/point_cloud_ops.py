@@ -3,6 +3,112 @@ import time
 import numba
 import numpy as np
 
+@numba.jit(nopython=True)
+def _xyz_to_rtp(x, y, z, unit='rad'):
+    r = np.sqrt(x**2 + y**2 + z**2)
+    phi = np.arctan2(np.sqrt(x**2 + y**2), z)
+    theta = np.arctan2(y, x)
+    if unit == 'deg':
+        theta = np.degrees(theta)
+        phi = np.degrees(phi)
+    return r, theta, phi
+
+@numba.jit(nopython=True)
+def _rtp_to_xyz(r, theta, phi, unit='rad'):
+    if unit == 'deg':
+        theta = np.radians(theta)
+        phi = np.radians(phi)
+    x = r * np.sin(phi) * np.cos(theta)
+    y = r * np.sin(phi) * np.sin(theta)
+    z = r * np.cos(phi)
+    return x, y, z
+
+@numba.jit(nopython=True)
+def _to_lidar_origin(x, y, z, lidar_xyz):
+    return x - lidar_xyz[0], y - lidar_xyz[1], z - lidar_xyz[2]
+
+@numba.jit(nopython=True)
+def _to_original_origin(x, y, z, lidar_xyz):
+    return x + lidar_xyz[0], y + lidar_xyz[1], z + lidar_xyz[2]
+
+@numba.jit(nopython=True)
+def _sort_points_by_range(points, ranges, lidar_xyz, prioritize_key_frame):
+    ranges[:] = np.square(points[:, 0]-lidar_xyz[0]) + np.square(points[:, 1]-lidar_xyz[1]) + np.square(points[:, 2]-lidar_xyz[2])
+    if prioritize_key_frame:
+        ranges = ranges + 10000000 * np.abs(points[:, -1])
+    return points[np.argsort(ranges)]
+
+# @numba.jit(nopython=True)
+# not use numba here as the over head is minimal
+def points_to_panoview(
+    points,                    
+    lidar_xyz, 
+    h_steps, 
+    v_steps,
+    sort_points_by_range=False,
+    prioritize_key_frame=False,
+):
+    """convert kitti points(N, >=3) to panoview featuremap. 
+
+    Args:
+        points: [N, ndim] float tensor. points[:, :3] contain xyz points and
+            points[:, 3:] contain other information such as reflectivity.
+        lidar_xyz: [3] list/tuple or array, float. lidar position offset
+        h_steps: [3] list/tuple or array, float. horizontal resolution and range
+        v_steps: [3] list/tuple or array, float. vertical resolution and range
+
+    Returns:
+        voxels: [M, max_points, ndim] float tensor. only contain points.
+        coordinates: [M, 3] int32 tensor.
+        num_points_per_voxel: [M] int32 tensor.
+    """
+    n_pt_feat = points.shape[-1] - 3
+    # range, height, mask, elevation
+    n_pano_feat = n_pt_feat + 4
+
+    h_len = int(np.rint((h_steps[1] - h_steps[0]) / h_steps[2]))
+    v_len = int(np.rint((v_steps[1] - v_steps[0]) / v_steps[2]))
+
+    if sort_points_by_range:
+        ranges = np.zeros(points.shape[0])
+        points = _sort_points_by_range(points, ranges, lidar_xyz, prioritize_key_frame)
+
+    x, y, z = points[:, 0], points[:, 1], points[:, 2]
+    x, y, z = _to_lidar_origin(x, y, z, lidar_xyz)
+    r, theta, phi = _xyz_to_rtp(x, y, z, unit='deg')
+
+
+    v_angle = 90 - phi
+    h_angle = theta
+    
+    ix = np.rint((v_angle - v_steps[0]) / v_steps[2]).astype(np.int64)
+    iy = np.rint((h_angle - h_steps[0]) / h_steps[2]).astype(np.int64)
+    
+    valid_idx = np.logical_and(np.logical_and(ix >=0, ix < v_len), np.logical_and(iy >= 0, iy < h_len))
+
+    # make sure each grid only contains one point
+    ixy = ix * h_len + iy
+    ixy[np.logical_not(valid_idx)] = -1
+    _, unique_indices = np.unique(ixy, return_index=True)
+
+    unique_idx = np.zeros_like(ix, dtype=np.bool)
+    unique_idx[unique_indices] = True
+    valid_idx = np.logical_and(unique_idx, valid_idx)
+
+    ix = ix[valid_idx]
+    iy = iy[valid_idx]
+
+    feat = np.zeros((n_pano_feat, v_len, h_len), dtype=points.dtype)
+    feat[0, ix, iy] = r[valid_idx]
+    feat[1, ix, iy] = z[valid_idx]
+    feat[2, ix, iy] = 1
+    feat[3, ix, iy] = np.radians(v_angle[valid_idx])
+    feat[4:, ix, iy] = points[valid_idx, 3:].T
+
+    # import ipdb; ipdb.set_trace()
+    # idxy = ix * h_len + iy
+    return points, feat, valid_idx, ix, iy
+
 
 @numba.jit(nopython=True)
 def _points_to_voxel_reverse_kernel(
@@ -15,6 +121,8 @@ def _points_to_voxel_reverse_kernel(
     coors,
     max_points=35,
     max_voxels=20000,
+    pt_to_voxel=None,
+
 ):
     # put all computations to one loop.
     # we shouldn't create large array in main jit code, otherwise
@@ -52,6 +160,8 @@ def _points_to_voxel_reverse_kernel(
         if num < max_points:
             voxels[voxelidx, num] = points[i]
             num_points_per_voxel[voxelidx] += 1
+            if pt_to_voxel is not None:
+                pt_to_voxel[i] = [voxelidx, num]
     return voxel_num
 
 
@@ -110,7 +220,7 @@ def _points_to_voxel_kernel(
 
 
 def points_to_voxel(
-    points, voxel_size, coors_range, max_points=35, reverse_index=True, max_voxels=20000
+    points, voxel_size, coors_range, max_points=35, reverse_index=True, max_voxels=20000, return_pt_to_voxel=False,
 ):
     """convert kitti points(N, >=3) to voxels. This version calculate
     everything in one loop. now it takes only 4.2ms(complete point cloud)
@@ -148,6 +258,11 @@ def points_to_voxel(
     # don't create large array in jit(nopython=True) code.
     num_points_per_voxel = np.zeros(shape=(max_voxels,), dtype=np.int32)
     coor_to_voxelidx = -np.ones(shape=voxelmap_shape, dtype=np.int32)
+    if return_pt_to_voxel:
+        pt_to_voxel = -np.ones(shape=(points.shape[0], 2), dtype=np.int64)
+    else:
+        pt_to_voxel = None
+
     voxels = np.zeros(
         shape=(max_voxels, max_points, points.shape[-1]), dtype=points.dtype
     )
@@ -163,9 +278,11 @@ def points_to_voxel(
             coors,
             max_points,
             max_voxels,
+            pt_to_voxel,
         )
 
     else:
+        assert pt_to_voxel is None, "not implemented for now!"
         voxel_num = _points_to_voxel_kernel(
             points,
             voxel_size,
@@ -181,7 +298,10 @@ def points_to_voxel(
     coors = coors[:voxel_num]
     voxels = voxels[:voxel_num]
     num_points_per_voxel = num_points_per_voxel[:voxel_num]
-    return voxels, coors, num_points_per_voxel
+    if return_pt_to_voxel:
+        return voxels, coors, num_points_per_voxel, pt_to_voxel
+    else:
+        return voxels, coors, num_points_per_voxel
 
 
 @numba.jit(nopython=True)

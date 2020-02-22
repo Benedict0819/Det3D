@@ -6,7 +6,7 @@ from det3d.torchie.cnn import constant_init, kaiming_init
 from det3d.torchie.trainer import load_checkpoint
 from torch.nn.modules.batchnorm import _BatchNorm
 
-from det3d.ops import DeformConv, ModulatedDeformConv
+# from det3d.ops import DeformConv, ModulatedDeformConv
 from ..registry import BACKBONES
 from ..utils import build_conv_layer, build_norm_layer
 
@@ -362,11 +362,20 @@ class ResNet(nn.Module):
         152: (Bottleneck, (3, 8, 36, 3)),
     }
 
+    block_types = {
+        "basic": BasicBlock,
+        "bottleneck": Bottleneck,
+    }
+
     def __init__(
         self,
-        depth,
+        depth=None,
+        block_type=None,
+        block_nums=None,
+        num_input_features=3,
         num_stages=4,
         strides=(1, 2, 2, 2),
+        n_planes=None,
         dilations=(1, 1, 1, 1),
         out_indices=(0, 1, 2, 3),
         style="pytorch",
@@ -382,13 +391,21 @@ class ResNet(nn.Module):
         stage_with_gen_attention=((), (), (), ()),
         with_cp=False,
         zero_init_residual=True,
+        include_stem_layer=True,
     ):
         super(ResNet, self).__init__()
-        if depth not in self.arch_settings:
-            raise KeyError("invalid depth {} for resnet".format(depth))
-        self.depth = depth
+        assert depth is not None or block_type is not None, "You must specify depth or block_type"
+        assert not (depth is not None and block_type is not None), "You must specify depth or block_type"
+        if depth is not None:
+            if depth not in self.arch_settings:
+                raise KeyError("invalid depth {} for resnet".format(depth))
+            self.depth = depth
+            self.block, stage_blocks = self.arch_settings[depth]
+        else:
+            self.block = self.block_types[block_type]
+            stage_blocks = block_nums
         self.num_stages = num_stages
-        assert num_stages >= 1 and num_stages <= 4
+        # assert num_stages >= 1 and num_stages <= 4
         self.strides = strides
         self.dilations = dilations
         assert len(strides) == len(dilations) == num_stages
@@ -410,11 +427,13 @@ class ResNet(nn.Module):
         if gcb is not None:
             assert len(stage_with_gcb) == num_stages
         self.zero_init_residual = zero_init_residual
-        self.block, stage_blocks = self.arch_settings[depth]
         self.stage_blocks = stage_blocks[:num_stages]
-        self.inplanes = 64
-
-        self._make_stem_layer()
+        self.include_stem_layer = include_stem_layer
+        if self.include_stem_layer:
+            self._make_stem_layer(num_input_features)
+            self.inplanes = 64
+        else:
+            self.inplanes = num_input_features
 
         self.res_layers = []
         for i, num_blocks in enumerate(self.stage_blocks):
@@ -422,7 +441,10 @@ class ResNet(nn.Module):
             dilation = dilations[i]
             dcn = self.dcn if self.stage_with_dcn[i] else None
             gcb = self.gcb if self.stage_with_gcb[i] else None
-            planes = 64 * 2 ** i
+            if n_planes is None:
+                planes = 64 * 2 ** i
+            else:
+                planes = n_planes[i]
             res_layer = make_res_layer(
                 self.block,
                 self.inplanes,
@@ -452,9 +474,9 @@ class ResNet(nn.Module):
     def norm1(self):
         return getattr(self, self.norm1_name)
 
-    def _make_stem_layer(self):
+    def _make_stem_layer(self, num_input_features=3):
         self.conv1 = build_conv_layer(
-            self.conv_cfg, 3, 64, kernel_size=7, stride=2, padding=3, bias=False
+            self.conv_cfg, num_input_features, 64, kernel_size=7, stride=2, padding=3, bias=False
         )
         self.norm1_name, norm1 = build_norm_layer(self.norm_cfg, 64, postfix=1)
         self.add_module(self.norm1_name, norm1)
@@ -462,7 +484,7 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
     def _freeze_stages(self):
-        if self.frozen_stages >= 0:
+        if self.frozen_stages >= 0 and self.include_stem_layer:
             self.norm1.eval()
             for m in [self.conv1, self.norm1]:
                 for param in m.parameters():
@@ -500,10 +522,12 @@ class ResNet(nn.Module):
             raise TypeError("pretrained must be a str or None")
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.norm1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
+
+        if self.include_stem_layer:
+            x = self.conv1(x)
+            x = self.norm1(x)
+            x = self.relu(x)
+            x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
