@@ -197,18 +197,106 @@ class VFEV3_ablation(nn.Module):
 @READERS.register_module
 class VoxelFeatureExtractorV3(nn.Module):
     def __init__(
-        self, num_input_features=4, norm_cfg=None, name="VoxelFeatureExtractorV3"
+        self, num_input_features=4, num_raw_features=0, norm_cfg=None, name="VoxelFeatureExtractorV3",
     ):
         super(VoxelFeatureExtractorV3, self).__init__()
         self.name = name
         self.num_input_features = num_input_features
+        self.num_raw_features = num_raw_features
 
-    def forward(self, features, num_voxels, coors=None):
-        points_mean = features[:, :, : self.num_input_features].sum(
-            dim=1, keepdim=False
-        ) / num_voxels.type_as(features).view(-1, 1)
+    def forward(self, features, num_voxels, coors=None, with_unnormalized_xyz = False):
+        if with_unnormalized_xyz:
+            features = features[:, :, 3:]
+        if self.num_raw_features > 0:
+            points_mean = features[:, :, : self.num_raw_features].sum(
+                dim=1, keepdim=False
+            ) / num_voxels.type_as(features).view(-1, 1)
+            features_max = features[:, :, self.num_raw_features :].max(
+                dim=1, keepdim=False
+            )[0]
+            features = torch.cat([points_mean, features_max], dim=-1)
+        else:
+            features = features[:, :, : self.num_input_features].sum(
+                dim=1, keepdim=False
+            ) / num_voxels.type_as(features).view(-1, 1)
 
-        return points_mean.contiguous()
+        return features.contiguous()
+
+@READERS.register_module
+class VoxelFeatureExtractorV4(nn.Module):
+    def __init__(
+        self, 
+        num_input_features=4, 
+        num_raw_features=0, 
+        with_distance=False,
+        with_elevation=False,
+        norm_cfg=None, 
+        voxel_size=(0.2, 0.2, 4),
+        pc_range=(0, -40, -3, 70.4, 40, 1),
+        name="VoxelFeatureExtractorV4",
+    ):
+        super(VoxelFeatureExtractorV4, self).__init__()
+        self.name = name
+        self.num_input_features = num_input_features
+        self.num_raw_features = num_raw_features
+
+        self.vx = voxel_size[0]
+        self.vy = voxel_size[1]
+        self.vz = voxel_size[2]
+        self.x_offset = self.vx / 2 + pc_range[0]
+        self.y_offset = self.vy / 2 + pc_range[1]
+        self.z_offset = self.vz / 2 + pc_range[2]
+        self._with_distance = with_distance
+        self._with_elevation = with_elevation
+
+    def forward(self, features, num_voxels, coors=None, with_unnormalized_xyz = False):
+        device = features.device
+        dtype = features.dtype
+        features_all = []
+
+        assert with_unnormalized_xyz
+
+        if self.num_raw_features > 0:
+            points_mean = features[:, :, : self.num_raw_features+3].sum(
+                dim=1, keepdim=False
+            ) / num_voxels.type_as(features).view(-1, 1)
+            features_max = features[:, :, self.num_raw_features+3 :].max(
+                dim=1, keepdim=False
+            )[0]
+            features_mean = torch.cat([points_mean, features_max], dim=-1)
+
+        else:
+            features_mean = (features[:, :, : self.num_input_features].sum(
+                dim=1, keepdim=False
+            ) / num_voxels.type_as(features).view(-1, 1))
+
+        # f_center = torch.zeros([features.shape[0], 3], dtype=dtype, device=device)
+        f_center = torch.zeros_like(features_mean[:, :3])
+        f_center[:, 0] = coors[:, 3].to(dtype) * self.vx + self.x_offset
+        f_center[:, 1] = coors[:, 2].to(dtype) * self.vy + self.y_offset
+        f_center[:, 2] = coors[:, 1].to(dtype) * self.vz + self.z_offset
+        f_center = features_mean[:, :3] - f_center
+
+        f_center[:, 0] = 2 * f_center[:, 0] / self.vx
+        f_center[:, 1] = 2 * f_center[:, 1] / self.vy
+        f_center[:, 2] = 2 * f_center[:, 2] / self.vz
+        features_all.append(f_center)
+
+        if self._with_elevation:
+            r = torch.norm(features_mean[:, :2], dim=-1, keepdim=True)
+            phi = torch.atan2(r, features_mean[:, 2].view_as(r))
+            features_all.append(phi)
+
+        features_mean = features_mean[:, 3:]
+
+        if self._with_distance:
+            points_dist = torch.norm(features_mean[:, :3], dim=-1, keepdim=True)
+            features_all.append(points_dist)
+
+        features_all.append(features_mean)
+        features = torch.cat(features_all, dim=-1)
+
+        return features.contiguous()
 
 
 @READERS.register_module

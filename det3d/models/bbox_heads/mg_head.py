@@ -16,7 +16,8 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from .. import builder
 from ..losses import accuracy
 from ..registry import HEADS
-
+from ..utils import build_conv_layer, build_norm_layer
+from ..backbones import BasicBlock
 
 def one_hot_f(tensor, depth, dim=-1, on_value=1.0, dtype=torch.float32):
     tensor_onehot = torch.zeros(
@@ -48,12 +49,18 @@ def _get_pos_neg_loss(cls_loss, labels):
         cls_neg_loss = cls_loss[..., 0].sum() / batch_size
     return cls_pos_loss, cls_neg_loss
 
+def warp_to_pi(input, offset=0):
+    return torch.remainder(input + np.pi - offset, 2*np.pi) - np.pi + offset
 
 def get_direction_target(anchors, reg_targets, one_hot=True, dir_offset=0.0):
     batch_size = reg_targets.shape[0]
     anchors = anchors.view(batch_size, -1, anchors.shape[-1])
     rot_gt = reg_targets[..., -1] + anchors[..., -1]
+    rot_gt = warp_to_pi(rot_gt, dir_offset)
+    # print(rot_gt.min(), rot_gt.max())
+
     dir_cls_targets = ((rot_gt - dir_offset) > 0).long()
+    # print(dir_cls_targets.float().mean(), dir_cls_targets.sum())
     if one_hot:
         dir_cls_targets = one_hot_f(dir_cls_targets, 2, dtype=anchors.dtype)
     return dir_cls_targets
@@ -203,19 +210,41 @@ class Head(nn.Module):
         header=True,
         name="",
         focal_loss_init=False,
+        middle_conv_channels=None,
+        norm_cfg=None,
         **kwargs,
     ):
         super(Head, self).__init__(**kwargs)
         self.use_dir = use_dir
+        self.middle_conv_channels = middle_conv_channels
+        self.norm_cfg = norm_cfg
+        n_input_channels = num_input
 
-        self.conv_box = nn.Conv2d(num_input, num_pred, 1)
-        self.conv_cls = nn.Conv2d(num_input, num_cls, 1)
+        if self.middle_conv_channels is not None:
+            self.middle_convs = []
+            for ch in self.middle_conv_channels:
+                self.middle_convs.append(BasicBlock(inplanes=n_input_channels, 
+                                                    planes=ch,
+                                                    stride=1,
+                                                    dilation=1,
+                                                    norm_cfg=self.norm_cfg,
+                                                    ignore_identity=True,))
+                n_input_channels = ch
+            self.middle_convs = nn.Sequential(*self.middle_convs)
+        else:
+            self.middle_convs = None
+
+        self.conv_box = nn.Conv2d(n_input_channels, num_pred, 1)
+        self.conv_cls = nn.Conv2d(n_input_channels, num_cls, 1)
 
         if self.use_dir:
-            self.conv_dir = nn.Conv2d(num_input, num_dir, 1)
+            self.conv_dir = nn.Conv2d(n_input_channels, num_dir, 1)
 
     def forward(self, x):
         ret_list = []
+        if self.middle_convs is not None:
+            x = self.middle_convs(x)
+
         box_preds = self.conv_box(x).permute(0, 2, 3, 1).contiguous()
         cls_preds = self.conv_cls(x).permute(0, 2, 3, 1).contiguous()
         ret_dict = {"box_preds": box_preds, "cls_preds": cls_preds}
@@ -387,7 +416,8 @@ class MultiGroupHead(nn.Module):
         norm_cfg=None,
         tasks=[],
         weights=[],
-        num_classes=[1,],
+        # num_classes=[1,],
+        middle_conv_channels=None,
         box_coder=None,
         with_cls=True,
         with_reg=True,
@@ -475,6 +505,8 @@ class MultiGroupHead(nn.Module):
             f"num_classes: {num_classes}, num_preds: {num_preds}, num_dirs: {num_dirs}"
         )
 
+        self.norm_cfg = norm_cfg
+        self.middle_conv_channels = middle_conv_channels
         self.tasks = nn.ModuleList()
         for task_id, (num_pred, num_cls) in enumerate(zip(num_preds, num_clss)):
             self.tasks.append(
@@ -487,6 +519,8 @@ class MultiGroupHead(nn.Module):
                     if self.use_direction_classifier
                     else None,
                     header=False,
+                    middle_conv_channels=self.middle_conv_channels,
+                    norm_cfg=self.norm_cfg,
                 )
             )
 
@@ -1034,13 +1068,17 @@ class MultiGroupHead(nn.Module):
                 if self.use_direction_classifier:
                     dir_labels = selected_dir_labels
                     opp_labels = (
-                        (box_preds[..., -1] - self.direction_offset) > 0
+                        (warp_to_pi(box_preds[..., -1], self.direction_offset) - self.direction_offset) > 0
+                        # (box_preds[..., -1] - self.direction_offset) > 0
                     ) ^ dir_labels.bool()
+                    # print(box_preds[..., -1].max(), box_preds[..., -1].min())
+                    # print(f'{opp_labels.sum()}/{opp_labels.size()}')
                     box_preds[..., -1] += torch.where(
                         opp_labels,
                         torch.tensor(np.pi).type_as(box_preds),
                         torch.tensor(0.0).type_as(box_preds),
                     )
+                    box_preds[..., -1] = warp_to_pi(box_preds[..., -1])
                 final_box_preds = box_preds
                 final_scores = scores
                 final_labels = label_preds

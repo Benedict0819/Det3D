@@ -60,7 +60,7 @@ def parse_args():
 
 
 def main():
-
+    testset = True
     # torch.manual_seed(0)
     # torch.backends.cudnn.deterministic = True
     # torch.backends.cudnn.benchmark = False
@@ -94,7 +94,10 @@ def main():
 
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
 
-    dataset = build_dataset(cfg.data.val)
+    if testset:
+        dataset = build_dataset(cfg.data.test)
+    else:
+        dataset = build_dataset(cfg.data.val)
     data_loader = build_dataloader(
         dataset,
         batch_size=cfg.data.samples_per_gpu,
@@ -107,7 +110,7 @@ def main():
 
     # put model on gpus
     if distributed:
-        model = apex.parallel.convert_syncbn_model(model)
+        # model = apex.parallel.convert_syncbn_model(model)
         model = DistributedDataParallel(
             model.cuda(cfg.local_rank),
             device_ids=[cfg.local_rank],
@@ -158,7 +161,7 @@ def main():
     for p in all_predictions:
         predictions.update(p)
 
-    result_dict, _ = dataset.evaluation(predictions, output_dir=args.work_dir)
+    result_dict, _ = dataset.evaluation(predictions, output_dir=args.work_dir, testset=testset)
 
     for k, v in result_dict["results"].items():
         print(f"Evaluation {k}: {v}")

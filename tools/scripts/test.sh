@@ -16,11 +16,19 @@ WORK_DIR=$OUT_DIR/eval
 # CHECKPOINT=/home/xiac/train_out/Det3D_Outputs/PointPillars_pano_20200205-004526/latest.pth
 
 # CHECKPOINT_PATH=/home/xiac/train_out/Det3D_Outputs/PointPillars_pano_pfpn_min4_range_sorted_20200211-070541
-CHECKPOINT_PATH=/home/xiac/train_out/Det3D_Outputs/PointPillars_pano_pfpn_10sweep_20200213-121204
-CONFIG=$CHECKPOINT_PATH/det3d/examples/point_pillars/configs/nusc_all_point_pillars_image_view_pfpn_mghead_syncbn_10sweep.py
-CHECKPOINT=$CHECKPOINT_PATH/latest.pth
+# CHECKPOINT_PATH=/home/xiac/train_out/Det3D_Outputs/NUSC_CBGS_pano_imp_highres_with_speed_corrected_angle_20200401-074135
+# CHECKPOINT=$CHECKPOINT_PATH/epoch_4.pth
 
-CONFIG=examples/point_pillars/configs/nusc_all_point_pillars_image_view_pfpn_mghead_syncbn_10sweep.py
+
+
+CHECKPOINT_PATH=/home/xiac/train_out/Det3D_Outputs/NUSC_CBGS_high_vert_20200410-061813
+CHECKPOINT=$CHECKPOINT_PATH/epoch_10.pth
+
+# CONFIG=$CHECKPOINT_PATH/det3d/examples/point_pillars/configs/nusc_all_point_pillars_image_view_pfpn_mghead_syncbn_10sweep.py
+CONFIG=examples/cbgs/configs/nusc_all_vfev3_pano_spmiddleresnetfhd_rpn2_mghead_syncbn_highres_highvert_imp_10sweep.py
+# CONFIG=examples/cbgs/configs/nusc_all_vfev3_pano_spmiddleresnetfhd_rpn2_mghead_syncbn_highres_highvert_imp_10sweep.py
+# CONFIG=$CHECKPOINT_PATH/det3d/examples/point_pillars/configs/nusc_all_vfev3_pano_spmiddleresnetfhd_rpn2_mghead_syncbn_highres_highvert_imp_10sweep.py
+
 
 # Test
 python -m torch.distributed.launch \

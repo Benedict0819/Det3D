@@ -136,9 +136,8 @@ class PillarFeatureNet(nn.Module):
 
         self.normalize_center_features = normalize_center_features
 
-    def get_pillar_feat(self, features, num_voxels, coors, normalized_feat=False):
+    def get_pillar_feat(self, features, num_voxels, coors, with_unnormalized_xyz=False):
         device = features.device
-
         dtype = features.dtype
 
         # Find distance of x, y, and z from cluster center
@@ -172,7 +171,7 @@ class PillarFeatureNet(nn.Module):
             phi = torch.atan2(r, features[:, :, 2].view_as(r))
             features_additional.append(phi)
 
-        if normalized_feat:
+        if with_unnormalized_xyz:
             features = features[:, :, 3:]
         # Combine together feature decorations
         features_ls = [features, f_cluster, f_center]
@@ -191,20 +190,20 @@ class PillarFeatureNet(nn.Module):
 
         return features
 
-    def forward(self, features, num_voxels, coors, normalized_feat=False):
+    def forward(self, features, num_voxels, coors, with_unnormalized_xyz=False):
 
         if self._group_input_raw_feats is not None:
             splitter = self._group_input_raw_feats[0]
             if normalized_feat:
                 splitter += 3
-            features_raw = self.get_pillar_feat(features[:, :, :splitter], num_voxels, coors, normalized_feat)
+            features_raw = self.get_pillar_feat(features[:, :, :splitter], num_voxels, coors, with_unnormalized_xyz)
             features_raw = self._group_input_pfn_layers['raw'](features_raw)
             features_deep = features[:, :, splitter:]
             features_deep = self._group_input_pfn_layers['deep'](features_deep)
             features = features_raw + features_deep
 
         else:
-            features = self.get_pillar_feat(features, num_voxels, coors, normalized_feat)
+            features = self.get_pillar_feat(features, num_voxels, coors, with_unnormalized_xyz)
 
         # Forward pass through PFNLayers
         for pfn in self.pfn_layers:

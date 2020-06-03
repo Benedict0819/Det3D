@@ -28,6 +28,7 @@ class BasicBlock(nn.Module):
         dcn=None,
         gcb=None,
         gen_attention=None,
+        ignore_identity=False,
     ):
         super(BasicBlock, self).__init__()
         assert dcn is None, "Not implemented yet."
@@ -57,6 +58,7 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
         self.dilation = dilation
+        self.ignore_identity = ignore_identity
         assert not with_cp
 
     @property
@@ -79,8 +81,8 @@ class BasicBlock(nn.Module):
 
         if self.downsample is not None:
             identity = self.downsample(x)
-
-        out += identity
+        if not self.ignore_identity:
+            out += identity
         out = self.relu(out)
 
         return out

@@ -185,7 +185,7 @@ class DataBaseSamplerV2:
                     if "rot_transform" in info:
                         rot = info["rot_transform"]
                         s_points[:, :3] = box_np_ops.rotation_points_single_angle(
-                            s_points[:, :4], rot, axis=2
+                            s_points[:, :3], rot, axis=2
                         )
                     s_points[:, :3] += info["box3d_lidar"][:3]
                     s_points_list.append(s_points)

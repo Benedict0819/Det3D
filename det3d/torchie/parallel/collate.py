@@ -105,11 +105,9 @@ def collate_kitti(batch_list, samples_per_gpu=1):
             acc += num.sum()
 
     for key, elems in example_merged.items():
-        if key in ["voxels", "num_points", "num_gt", "voxel_labels", "num_voxels", "panoview_ix", "panoview_iy"]:
+        if key in ["voxels", "num_points", "num_gt", "voxel_labels", "num_voxels", "panoview_ix", "panoview_iy",]:
             ret[key] = torch.tensor(np.concatenate(elems, axis=0))
-        elif key in [
-            "gt_boxes",
-        ]:
+        elif key in ["gt_boxes",]:
             task_max_gts = []
             for task_id in range(len(elems[0])):
                 max_gt = 0

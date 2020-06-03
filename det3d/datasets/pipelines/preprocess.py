@@ -148,7 +148,7 @@ class Preprocess(object):
                 point_counts = box_np_ops.points_count_rbbox(
                     points, gt_dict["gt_boxes"]
                 )
-                mask = point_counts >= min_points_in_gt
+                mask = point_counts >= self.min_points_in_gt
                 _dict_select(gt_dict, mask)
 
             gt_boxes_mask = np.array(
@@ -270,6 +270,7 @@ class PanoviewProjection(object):
         self.prioritize_key_frame = cfg.get("prioritize_key_frame", False)
         self.min_points_in_bbox = cfg.get("min_points_in_bbox", -1)
         self.shuffle_points = cfg.get("shuffle_points", False)
+        self.keep_unprojected_points = cfg.get("keep_unprojected_points", False)
         self.mode = cfg.get("mode", "train")
         self.panoview_projector = PanoviewProjector(
             lidar_xyz=[0, 0, 0], 
@@ -281,10 +282,18 @@ class PanoviewProjection(object):
 
     
     def __call__(self, res, info):
+        if self.shuffle_points:
+            # shuffle is a little slow.
+            shuffled_idx = np.arange(res["lidar"]["points"].shape[0])
+            np.random.shuffle(shuffled_idx)
+            res["lidar"]["points"] = res["lidar"]["points"][shuffled_idx]
+        
         res["lidar"]["points"], feat, valid_idx, ix, iy = self.panoview_projector.project(
             res["lidar"]["points"]
         )
-        res["lidar"]["points"] = res["lidar"]["points"][valid_idx]
+
+        # res["lidar"]["points"] = res["lidar"]["points"][valid_idx]
+
         if self.mode == "train":
             if self.min_points_in_bbox > 0:
                 gt_dict = res["lidar"]["annotations"]
@@ -296,15 +305,7 @@ class PanoviewProjection(object):
                 _dict_select(gt_dict, mask)
                 res["lidar"]["annotations"] = gt_dict
 
-        if self.shuffle_points:
-            # shuffle is a little slow.
-            shuffled_idx = np.arange(res["lidar"]["points"].shape[0])
-            np.random.shuffle(shuffled_idx)
-            res["lidar"]["points"] = res["lidar"]["points"][shuffled_idx]
-            ix = ix[shuffled_idx]
-            iy = iy[shuffled_idx]
-
-        res["lidar"]["panoview"] = dict(feat=feat, ix=ix, iy=iy)
+        res["lidar"]["panoview"] = dict(feat=feat, ix=ix, iy=iy, valid_idx=valid_idx)
         # import ipdb; ipdb.set_trace()
         return res, info
 
@@ -327,11 +328,9 @@ class Voxelization(object):
         )
 
     def __call__(self, res, info):
-        # [0, -40, -3, 70.4, 40, 1]
         voxel_size = self.voxel_generator.voxel_size
         pc_range = self.voxel_generator.point_cloud_range
         grid_size = self.voxel_generator.grid_size
-        # [352, 400]
 
         if res["mode"] == "train":
             gt_dict = res["lidar"]["annotations"]
@@ -343,7 +342,7 @@ class Voxelization(object):
 
         # points = points[:int(points.shape[0] * 0.1), :]
         points = res["lidar"]["points"]
-        
+
         if self.include_pt_to_voxel:
             voxels, coordinates, num_points, pt_to_voxel = self.voxel_generator.generate(points)
         else:
@@ -361,6 +360,9 @@ class Voxelization(object):
 
         if self.include_pt_to_voxel:
             res["lidar"]["voxels"]["pt_to_voxel"] = pt_to_voxel
+
+        if "valid_idx" in res["lidar"]: # panoview projector is used
+            valid_idx = res["lidar"]["valid_idx"]
 
         return res, info
 

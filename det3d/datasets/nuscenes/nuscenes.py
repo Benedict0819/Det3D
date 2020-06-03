@@ -37,10 +37,11 @@ class NuScenesDataset(PointCloudDataset):
         pipeline=None,
         class_names=None,
         test_mode=False,
+        version="v1.0-trainval",
         **kwargs,
     ):
         super(NuScenesDataset, self).__init__(
-            root_path, info_path, pipeline, test_mode=test_mode, class_names=class_names
+            root_path, info_path, pipeline, test_mode=test_mode, class_names=class_names,
         )
 
         self.nsweeps = n_sweeps
@@ -55,7 +56,7 @@ class NuScenesDataset(PointCloudDataset):
         self._num_point_features = NuScenesDataset.NumPointFeatures
         self._name_mapping = general_to_detection
 
-        self.version = "v1.0-trainval"
+        self.version = version
         self.eval_version = "cvpr_2019"
 
     def reset(self):

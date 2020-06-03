@@ -33,7 +33,7 @@ class Reformat(object):
         )
 
         if self.pack_imageview_info:
-            pt_to_voxel = voxels["pt_to_voxel"]
+            pt_to_voxel = voxels["pt_to_voxel"][res["lidar"]["panoview"]["valid_idx"]]
             valid_idx = pt_to_voxel[:, 0] != -1
             data_bundle.update(dict(
                 panoview_feat=res["lidar"]["panoview"]["feat"],

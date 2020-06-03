@@ -17,9 +17,9 @@ norm_cfg_1d = dict(type='PyTorchSyncBN', eps=1e-5, momentum=0.1)
 
 # norm_cfg = None
 
-num_feat_sampler = 5 # x y z intensity ring
-num_feat_points = 4 # x y z intensity 
-num_feat_points_pano = 5 # r z mask intensity elevation
+num_feat_sampler = 6 # x y z intensity ring time
+num_feat_points = 5 # x y z intensity time
+num_feat_points_pano = 6 # r z mask elevation intensity time
 num_feat_raw = 4 # x y z intensity 
 
 tasks = [
@@ -39,7 +39,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[1.97, 4.63, 1.74],
-            anchor_ranges=[-50, -50, -0.95, 50, 50, -0.95],
+            anchor_ranges=[-51.2, -51.2, -0.95, 51.2, 51.2, -0.95],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.6,
@@ -49,7 +49,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[2.51, 6.93, 2.84],
-            anchor_ranges=[-50, -50, -0.40, 50, 50, -0.40],
+            anchor_ranges=[-51.2, -51.2, -0.40, 51.2, 51.2, -0.40],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.55,
@@ -59,7 +59,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[2.85, 6.37, 3.19],
-            anchor_ranges=[-50, -50, -0.225, 50, 50, -0.225],
+            anchor_ranges=[-51.2, -51.2, -0.225, 51.2, 51.2, -0.225],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.5,
@@ -69,7 +69,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[2.94, 10.5, 3.47],
-            anchor_ranges=[-50, -50, -0.085, 50, 50, -0.085],
+            anchor_ranges=[-51.2, -51.2, -0.085, 51.2, 51.2, -0.085],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.55,
@@ -79,7 +79,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[2.90, 12.29, 3.87],
-            anchor_ranges=[-50, -50, 0.115, 50, 50, 0.115],
+            anchor_ranges=[-51.2, -51.2, 0.115, 51.2, 51.2, 0.115],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.5,
@@ -89,7 +89,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[2.53, 0.50, 0.98],
-            anchor_ranges=[-50, -50, -1.33, 50, 50, -1.33],
+            anchor_ranges=[-51.2, -51.2, -1.33, 51.2, 51.2, -1.33],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.55,
@@ -99,7 +99,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[0.77, 2.11, 1.47],
-            anchor_ranges=[-50, -50, -1.085, 50, 50, -1.085],
+            anchor_ranges=[-51.2, -51.2, -1.085, 51.2, 51.2, -1.085],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.5,
@@ -109,7 +109,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[0.60, 1.70, 1.28],
-            anchor_ranges=[-50, -50, -1.18, 50, 50, -1.18],
+            anchor_ranges=[-51.2, -51.2, -1.18, 51.2, 51.2, -1.18],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.5,
@@ -119,7 +119,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[0.67, 0.73, 1.77],
-            anchor_ranges=[-50, -50, -0.935, 50, 50, -0.935],
+            anchor_ranges=[-51.2, -51.2, -0.935, 51.2, 51.2, -0.935],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.6,
@@ -129,7 +129,7 @@ target_assigner = dict(
         dict(
             type="anchor_generator_range",
             sizes=[0.41, 0.41, 1.07],
-            anchor_ranges=[-50, -50, -1.285, 50, 50, -1.285],
+            anchor_ranges=[-51.2, -51.2, -1.285, 51.2, 51.2, -1.285],
             rotations=[0, 1.57],
             velocities=[0, 0],
             matched_threshold=0.6,
@@ -147,10 +147,10 @@ target_assigner = dict(
 voxel_generator = dict(
     # range=[-51.2, -51.2, -4.0, 51.2, 51.2, 2.0],
     # voxel_size=[0.16, 0.16, 6],
-    range=[-50, -50, -4.0, 50, 50, 2.0],
-    voxel_size=[0.25, 0.25, 6],
-    max_points_in_voxel=50,
-    max_voxel_num=60000,
+    range=[-51.2, -51.2, -4.0, 51.2, 51.2, 2.0],
+    voxel_size=[0.1, 0.1, 6],
+    max_points_in_voxel=16,
+    max_voxel_num=50000,
     include_pt_to_voxel=True,
 )
 
@@ -159,12 +159,13 @@ box_coder = dict(
     type="ground_box3d_coder", n_dim=9, linear_dim=False, encode_angle_vector=False,
 )
 
+
 pano_feat_normalizer = dict(
     type="FeatureNormalizer",
-    # mean=[0, -0.5, 0, 13.0, 10.2,], # r, z, mask, intensity, ring
-    # std=[11.0, 1.5, 1, 21.0, 9.6,],
-    mean=[0, -0.5, 0, 13.0, -0.13], # r, z, mask, intensity, elevation
-    std=[11.0, 1.5, 1, 21.0, 0.18],
+    # mean=[0, -0.5, 0, 13.0, 10.2, 0.225], # r, z, mask, intensity, ring, time
+    # std=[11.0, 1.5, 1, 21.0, 9.6, 0.225],
+    mean=[0, -0.5, 0, -0.13, 13.0, 0.225], # r, z, mask, elevation, intensity, time
+    std=[11.0, 1.5, 1, 0.18, 21.0, 0.225],
     dim=4,
     axis=1,
     name="pano_feature_normalizer",
@@ -172,27 +173,45 @@ pano_feat_normalizer = dict(
 
 pillar_feat_normalizer = dict(
     type="FeatureNormalizer",
-    # mean=[0, 0, -0.67, 17.6, 15.0,], # x, y, z, intensity, ring,
-    # std=[9.6, 12.1, 1.76, 17.3, 8.2,],
-    mean=[0, 0, -0.67, 17.6, ], # x, y, z, intensity, 
-    std=[9.6, 12.1, 1.76, 17.3, ],
+    # mean=[0, 0, -0.67, 17.6, 15.0, 0.225], # x, y, z, intensity, ring, time
+    # std=[9.6, 12.1, 1.76, 17.3, 8.2, 0.225],
+    mean=[0, 0, -0.67, 17.6, 0.225], # x, y, z, intensity, time
+    std=[9.6, 12.1, 1.76, 17.3, 0.225],
     dim=3,
     axis=2,
     name="pillar_feature_normalizer",
 )
 
+
 # model settings
 model = dict(
     type="PanoviewPointPillars",
     pretrained=None,
+    # panoview_reader=dict(
+    #     type="ResNet_Panoptic_FPN",
+    #     layer_nums=[3, 4, 6, 3],
+    #     ds_layer_strides=[1, 2, 2, 2],
+    #     ds_num_filters=[64, 64, 128, 128],
+    #     us_layer_strides=[1, 2, 4, 8],
+    #     fpn_num_filters=64,
+    #     us_num_filters=[64, 64, 64, 64],
+    #     aggregation_method="add",
+    #     num_input_features=6,
+    #     include_stem_layer=False,
+    #     norm_cfg=norm_cfg,
+    #     name="PanoviewPFPN",
+    #     logger=logging.getLogger("Panoview"),
+    # ),
+    pano_feat_normalizer=pano_feat_normalizer,
+    pillar_feat_normalizer=pillar_feat_normalizer,
     panoview_reader=dict(
         type="ResNet_Panoptic_FPN",
-        layer_nums=[3, 4, 6, 3],
-        ds_layer_strides=[1, 2, 2, 2],
-        ds_num_filters=[64, 64, 128, 128],
-        us_layer_strides=[1, 2, 4, 8],
+        layer_nums=[3, 3, 4, 6, 3],
+        ds_layer_strides=[1, 2, 2, 2, 2],
+        ds_num_filters=[32, 64, 128, 128, 128],
+        us_layer_strides=[1, 2, 4, 8, 16],
         fpn_num_filters=64,
-        us_num_filters=[64, 64, 64, 64],
+        us_num_filters=[64, 64, 64, 64, 64],
         aggregation_method="add",
         num_input_features=num_feat_points_pano,
         include_stem_layer=False,
@@ -200,12 +219,21 @@ model = dict(
         name="PanoviewPFPN",
         logger=logging.getLogger("Panoview"),
     ),
-    pano_feat_normalizer=pano_feat_normalizer,
-    pillar_feat_normalizer=pillar_feat_normalizer,
+    # reader=dict(
+    #     type="PillarFeatureNet",
+    #     num_input_features=num_feat_points+64,
+    #     num_filters=[128, 128],
+    #     with_distance=False,
+    #     voxel_size=voxel_generator["voxel_size"],
+    #     pc_range=voxel_generator["range"],
+    #     norm_cfg=norm_cfg_1d,
+    #     normalize_center_features=True,
+    # ),
     reader=dict(
         type="PillarFeatureNet",
         num_input_features=num_feat_points+64,
-        num_filters=[128, 128],
+        # group_input_raw_feats=[num_feat_points, 64],
+        num_filters=[128, 64],
         with_distance=True,
         with_elevation=True,
         norm_cfg=norm_cfg_1d,
@@ -213,33 +241,36 @@ model = dict(
         pc_range=voxel_generator["range"],
         normalize_center_features=True,
     ),
-    # reader=dict(
-    #     type="PillarFeatureNet",
-    #     num_input_features=128,
-    #     group_input_raw_feats=[num_feat_points, 64],
-    #     num_filters=[128,],
-    #     with_distance=True,
-    #     with_elevation=True,
-    #     norm_cfg=norm_cfg_1d,
-    #     voxel_size=voxel_generator["voxel_size"],
-    #     pc_range=voxel_generator["range"],
-    #     normalize_center_features=True,
-    # ),
-    backbone=dict(type="PointPillarsScatter", ds_factor=1, num_input_features=128, norm_cfg=norm_cfg,), #ds_factor does nothing here
+    backbone=dict(type="PointPillarsScatter", ds_factor=1, num_input_features=64, norm_cfg=norm_cfg,),
     neck=dict(
         type="ResNet_Panoptic_FPN",
-        layer_nums=[3, 5, 5, 3],
-        ds_layer_strides=[2, 2, 2, 2],
-        ds_num_filters=[128, 128, 128, 256],
-        us_layer_strides=[1, 2, 4, 8],
-        us_num_filters=[128, 128, 128, 128],
+        layer_nums=[3, 5, 5, 5, 3],
+        ds_layer_strides=[2, 2, 2, 2, 2],
+        ds_num_filters=[64, 128, 128, 128, 256],
+        us_layer_strides=[0.25, 0.5, 1, 2, 4],
+        # us_layer_strides=[0.5, 1, 2, 4, 8],
+        us_num_filters=[128, 128, 128, 128, 128],
         fpn_num_filters=128,
-        num_input_features=128,
+        num_input_features=64,
         include_stem_layer=False,
         aggregation_method="add",
         norm_cfg=norm_cfg,
         logger=logging.getLogger("RPN"),
     ),
+    # neck=dict(
+    #     type="ResNet_Panoptic_FPN",
+    #     layer_nums=[3, 5, 5, 5, 3],
+    #     ds_layer_strides=[2, 2, 2, 2, 2],
+    #     ds_num_filters=[128, 128, 128, 256, 256],
+    #     us_layer_strides=[0.5, 1, 2, 4, 8],
+    #     us_num_filters=[128, 128, 128, 128, 128],
+    #     fpn_num_filters=128,
+    #     num_input_features=128,
+    #     include_stem_layer=False,
+    #     aggregation_method="add",
+    #     norm_cfg=norm_cfg,
+    #     logger=logging.getLogger("RPN"),
+    # ),
 
     bbox_head=dict(
         # type='RPNHead',
@@ -259,7 +290,7 @@ model = dict(
         loss_bbox=dict(
             type="WeightedSmoothL1Loss",
             sigma=3.0,
-            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0],
+            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0], # remove speed
             codewise=True,
             loss_weight=1.0,
         ),
@@ -297,14 +328,14 @@ test_cfg = dict(
 
 # dataset settings
 dataset_type = "NuScenesDataset"
-n_sweeps = 1
+n_sweeps = 10
 data_root = "/datasets/nuscenes/"
 
-sampler_min_pts_per_instance = 4
+sampler_min_pts_per_instance = 5
 db_sampler = dict(
     type="GT-AUG",
     enable=False,
-    db_info_path=data_root + "dbinfos_train_1sweeps_withvelo.pkl",
+    db_info_path=data_root + "dbinfos_train_10sweeps_withvelo.pkl",
     sample_groups=[
         dict(car=2),
         dict(truck=3),
@@ -334,7 +365,8 @@ db_sampler = dict(
         ),
         dict(filter_by_difficulty=[-1],),
     ],
-    global_random_rotation_range_per_object=[-1.57, 1.57],
+    # global_random_rotation_range_per_object=[-1.57, 1.57],
+    global_random_rotation_range_per_object=[0, 0],
     rate=1.0,
 )
 
@@ -344,6 +376,7 @@ train_preprocessor = dict(
     gt_loc_noise=[0.0, 0.0, 0.0],
     gt_rot_noise=[0.0, 0.0],
     global_rot_noise=[-0.3925, 0.3925],
+    # global_scale_noise=[1.00, 1.00],
     global_scale_noise=[0.95, 1.05],
     global_rot_per_obj_range=[0, 0],
     global_trans_noise=[0.2, 0.2, 0.2],
@@ -354,7 +387,7 @@ train_preprocessor = dict(
     remove_environment=False,
     db_sampler=db_sampler,
     class_names=class_names,
-    time_stamp_as_last_feature=False, # do not use time
+    time_stamp_as_last_feature=True, 
     num_point_features_sampler=num_feat_sampler,
     num_point_features=num_feat_points,
 )
@@ -364,30 +397,51 @@ val_preprocessor = dict(
     shuffle_points=True,
     remove_environment=False,
     remove_unknown_examples=False,
-    time_stamp_as_last_feature=False,
-    num_point_features_sampler=num_feat_sampler,
+    time_stamp_as_last_feature=True,
+    num_point_features_sampler=num_feat_sampler, 
     num_point_features=num_feat_points,
 )
+
 
 panoview_projector_train = dict(
     mode="train",
     lidar_xyz=[0, 0, 0], 
-    h_steps=(-180, 180, 0.3125), 
-    v_steps=(-30, 10, 1.25),
+    h_steps=(-180, 180, 0.17578125), 
+    v_steps=(-30, 10, 0.625),
     sort_points_by_range=True,
-    min_points_in_bbox=1,
+    prioritize_key_frame=True,
     shuffle_points=False,
+    min_points_in_bbox=5,
 )
 
 panoview_projector_val = dict(
     mode="val",
     lidar_xyz=[0, 0, 0], 
-    h_steps=(-180, 180, 0.3125), 
-    v_steps=(-30, 10, 1.25),
+    h_steps=(-180, 180, 0.17578125), 
+    v_steps=(-30, 10, 0.625),
     sort_points_by_range=True,
+    prioritize_key_frame=True,
     shuffle_points=False,
 )
 
+# panoview_projector_train = dict(
+#     mode="train",
+#     lidar_xyz=[0, 0, 0], 
+#     h_steps=(-180, 180, 0.3125), 
+#     v_steps=(-30, 10, 1.25),
+#     sort_points_by_range=True,
+#     min_points_in_bbox=1,
+#     shuffle_points=True,
+# )
+
+# panoview_projector_val = dict(
+#     mode="val",
+#     lidar_xyz=[0, 0, 0], 
+#     h_steps=(-180, 180, 0.3125), 
+#     v_steps=(-30, 10, 1.25),
+#     sort_points_by_range=True,
+#     shuffle_points=True,
+# )
 
 train_pipeline = [
     dict(type="LoadPointCloudFromFile", dataset=dataset_type, num_point_feature=num_feat_raw),
@@ -409,12 +463,12 @@ test_pipeline = [
     dict(type="Reformat", pack_imageview_info=True),
 ]
 
-train_anno = data_root + "infos_train_01sweeps_withvelo.pkl"
-val_anno = data_root + "infos_val_01sweeps_withvelo.pkl"
+train_anno = data_root + "infos_train_10sweeps_withvelo.pkl"
+val_anno = data_root + "infos_val_10sweeps_withvelo.pkl"
 test_anno = None
 
 data = dict(
-    samples_per_gpu=3,
+    samples_per_gpu=1,
     workers_per_gpu=8,
     train=dict(
         type=dataset_type,
@@ -451,16 +505,16 @@ data = dict(
 #     type="adam",  lr=0.001, amsgrad=0.0, wd=0.01, fixed_wd=True, moving_average=False,
 # )
 
+# optimizer = dict(
+#     type="adam",  lr=0.00003, amsgrad=0.0, wd=0.0001, fixed_wd=True,
+# )
+
 optimizer = dict(
-    type="adam",  lr=0.001, amsgrad=0.0, wd=0.0001, fixed_wd=True,
+    type="Adam",  lr=0.00003, weight_decay=0.0001,
 )
 
 # optimizer = dict(
-#     type="SGD",  lr=0.001, weight_decay=0.0001, momentum=0.95,
-# )
-
-# optimizer = dict(
-#     type="Adam",  lr=0.0006, weight_decay=0.0001,
+#     type="SGD",  lr=0.01, weight_decay=0.0001, momentum=0.95,
 # )
 
 # These are really 'hooks' not actual config (config of optimizer is above)
@@ -468,17 +522,13 @@ optimizer = dict(
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 
 # learning policy in training hooks
+# lr_config = dict(
+#     type="one_cycle", lr_max=0.0003, moms=[0.95, 0.85], div_factor=5.0, pct_start=0.4,
+# )
+
 lr_config = dict(
-    type="one_cycle", lr_max=0.0005, moms=[0.95, 0.85], div_factor=5.0, pct_start=0.4,
+    type=None, policy="Step", by_epoch=True, gamma=0.1, step=[],
 )
-
-# lr_config = dict(
-#     type=None, policy="Step", by_epoch=True, gamma=0.2, step=[3, 6],
-# )
-
-# lr_config = dict(
-#     type=None, policy="Poly", power=0.5, min_lr=0.00002
-# )
 
 checkpoint_config = dict(interval=1)
 # yapf:disable
@@ -491,7 +541,7 @@ log_config = dict(
 )
 # yapf:enable
 # runtime settings
-total_epochs = 5
+total_epochs = 8
 device_ids = range(4)
 dist_params = dict(backend="nccl", init_method="env://")
 log_level = "INFO"

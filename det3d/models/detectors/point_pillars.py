@@ -88,6 +88,7 @@ class PanoviewPointPillars(PointPillars):
         if self.pano_feat_normalizer is not None:
             pano_features = self.pano_feat_normalizer(pano_features)
 
+        feat = data["features"]
         pano_features = self.panoview_reader(pano_features)
         n_feat = feat.shape[-1]
 
@@ -102,13 +103,13 @@ class PanoviewPointPillars(PointPillars):
         feat[data["pt_to_voxel"][:, 0], data["pt_to_voxel"][:, 1], n_feat:] = pano_features[data['ib'], :, data['ix'], data['iy']]
 
         input_features = self.reader(
-            feat, data["num_voxels"], data["coors"], normalized_feat = self.pano_feat_normalizer is not None
+            feat, data["num_voxels"], data["coors"], with_unnormalized_xyz = self.pano_feat_normalizer is not None
         )
         
         x = self.backbone(
             input_features, data["coors"], data["batch_size"], data["input_shape"]
         )
-
+        
         if self.with_neck:
             x = self.neck(x)
 
